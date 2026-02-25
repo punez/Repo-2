@@ -12,4 +12,10 @@ https://raw.githubusercontent.com/HosseinKoofi/GO_V2rayCollector/main/ss_iran.tx
 https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/refs/heads/main/Reality
 https://raw.githubusercontent.com/4n0nymou3/multi-proxy-config-fetcher/refs/heads/main/configs/proxy_configs.txt#Anonymous-Multi
 https://raw.githubusercontent.com/eliv2-ray/ELENA-config/refs/heads/main/Shadow-ELiV2ray#Porteqal3%20502
-
+https://raw.githubusercontent.com/parvinxs/Submahsanetxsparvin/refs/heads/main/Sub.mahsa.xsparvin
+https://raw.githubusercontent.com/morteza-v2/free-v2ray-irancell-config/refs/heads/main/Sub1.txt
+https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/4.txt
+https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt
+https://raw.githubusercontent.com/DukeMehdi/FreeList-V2ray-Configs/refs/heads/main/Configs/VMESS-DukeMehdi-Configs.txt
+https://raw.githubusercontent.com/DukeMehdi/FreeList-V2ray-Configs/refs/heads/main/Configs/VLESS-DukeMehdi-Configs.txt
+https://raw.githubusercontent.com/SoliSpirit/v2ray-configs/refs/heads/main/all_configs.txt
