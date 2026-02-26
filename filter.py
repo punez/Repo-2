@@ -1,107 +1,100 @@
-import asyncio
-import aiohttp
+import requests
 import base64
 import json
-import yaml
-import re
+import urllib.parse
+import random
+from datetime import datetime
 
-TIMEOUT = 5
-CONCURRENCY = 100
-MAX_OUTPUT = 800
+# تنظیمات
+SUB_SOURCES_URL = "https://raw.githubusercontent.com/punez/Repo-2/refs/heads/main/inputs.txt"  # ← USERNAME و REPO-N رو برای هر ریپو عوض کن (مثلاً Repo-1)
+OUTPUT_FILE = "final.txt"  # اسم هماهنگ برای همه
 
-def try_base64_decode(text):
+def log(msg):
+    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    print(f"[{ts}] {msg}")
+
+def fetch_sources():
     try:
-        decoded = base64.b64decode(text).decode()
-        if "://" in decoded:
-            return decoded
-    except:
-        pass
-    return text
+        r = requests.get(SUB_SOURCES_URL, timeout=15)
+        r.raise_for_status()
+        urls = [line.strip() for line in r.text.splitlines() if line.strip() and not line.startswith("#")]
+        log(f"Found {len(urls)} subscription URLs")
+        return urls
+    except Exception as e:
+        log(f"Error fetching sources.txt: {e}")
+        return []
 
-def extract_from_yaml(text):
-    links = []
+def fetch_and_decode(url):
     try:
-        data = yaml.safe_load(text)
-        if isinstance(data, dict) and "proxies" in data:
-            for p in data["proxies"]:
-                if "server" in p and "port" in p:
-                    links.append(f"{p.get('type','unknown')}://{p['server']}:{p['port']}")
-    except:
-        pass
-    return links
+        r = requests.get(url.strip(), timeout=20)
+        r.raise_for_status()
+        content = r.text.strip()
+        try:
+            decoded = base64.b64decode(content + "===").decode("utf-8", errors="ignore")
+            if "\n" in decoded or "://" in decoded:
+                return decoded.splitlines()
+        except:
+            pass
+        return content.splitlines()
+    except Exception as e:
+        log(f"Failed to fetch {url}: {e}")
+        return []
 
-def extract_from_json(text):
-    links = []
+def get_fingerprint(line):
+    line = line.strip()
+    if not line:
+        return None
     try:
-        data = json.loads(text)
-        if "outbounds" in data:
-            for o in data["outbounds"]:
-                if "server" in o and "server_port" in o:
-                    links.append(f"{o.get('type','unknown')}://{o['server']}:{o['server_port']}")
-    except:
-        pass
-    return links
-
-def extract_host_port(link):
-    try:
-        if "@" in link:
-            body = link.split("@")[1]
+        if line.startswith("vmess://"):
+            b64 = line[8:].split("#")[0]
+            data = json.loads(base64.b64decode(b64 + "===").decode("utf-8", errors="ignore"))
+            return "|".join(str(x).lower() for x in [
+                data.get("add", ""), data.get("port", ""),
+                data.get("id", ""), data.get("fp", ""),
+                data.get("path", ""), data.get("net", ""),
+                data.get("security", ""), data.get("type", "")
+            ])
+        elif line.startswith(("vless://", "trojan://")):
+            url = urllib.parse.urlparse(line.split("#")[0])
+            params = urllib.parse.parse_qs(url.query)
+            return "|".join(str(x).lower() for x in [
+                url.hostname or "",
+                url.port or "443",
+                url.username or "",
+                params.get("fp", [""])[0],
+                params.get("path", [""])[0] or params.get("serviceName", [""])[0],
+                params.get("type", [""])[0],
+                params.get("security", [""])[0]
+            ])
         else:
-            body = link.split("://")[1]
-        host_port = re.split(r"[/?#]", body)[0]
-        host, port = host_port.split(":")
-        return host, int(port)
+            return line.split("#")[0].lower()
     except:
-        return None, None
+        return line.split("#")[0].lower()
 
-async def tcp_check(host, port):
-    try:
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(host, port),
-            timeout=TIMEOUT
-        )
-        writer.close()
-        await writer.wait_closed()
-        return True
-    except:
-        return False
+# اجرای اصلی
+log("=== Starting Filter (Repo 1-4) ===")
 
-async def main():
-    sources = open("subs.txt").read().splitlines()
-    links = set()
+all_lines = []
+for sub_url in fetch_sources():
+    lines = fetch_and_decode(sub_url)
+    all_lines.extend(lines)
 
-    async with aiohttp.ClientSession() as session:
-        for url in sources:
-            try:
-                async with session.get(url, timeout=15) as resp:
-                    text = await resp.text()
-                    text = try_base64_decode(text)
+log(f"Total raw lines: {len(all_lines)}")
 
-                    if "://" in text:
-                        for line in text.splitlines():
-                            if "://" in line:
-                                links.add(line.strip())
+seen = {}
+for line in all_lines:
+    key = get_fingerprint(line)
+    if key and key not in seen:
+        seen[key] = line
 
-                    links.update(extract_from_yaml(text))
-                    links.update(extract_from_json(text))
-            except:
-                pass
+unique_nodes = list(seen.values())
+random.shuffle(unique_nodes)  # تنوع
 
-    sem = asyncio.Semaphore(CONCURRENCY)
-    healthy = []
+# بدون سقف
+final_list = unique_nodes
 
-    async def check(link):
-        async with sem:
-            host, port = extract_host_port(link)
-            if host and port:
-                if await tcp_check(host, port):
-                    healthy.append(link)
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    for node in final_list:
+        f.write(node + "\n")
 
-    await asyncio.gather(*(check(l) for l in links))
-
-    healthy = healthy[:MAX_OUTPUT]
-
-    with open("healthy.txt", "w") as f:
-        f.write("\n".join(healthy))
-
-asyncio.run(main())
+log(f"Done: {len(final_list)} nodes → {OUTPUT_FILE}")
